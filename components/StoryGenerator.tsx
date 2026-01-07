@@ -162,15 +162,28 @@ const StoryGenerator: React.FC<StoryGeneratorProps> = ({
     const pad = (num: number) => num.toString().padStart(2, '0');
     const dateStr = `${pad(now.getMonth() + 1)}${pad(now.getDate())}${now.getFullYear().toString().slice(-2)}-${pad(now.getHours())}${pad(now.getMinutes())}`;
     const safeTitle = storyTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const folderName = `${dateStr}-${safeTitle}`;
 
-    // Download script.json
-    const scriptContent = JSON.stringify(editableScript, null, 2);
-    const scriptBlob = new Blob([scriptContent], {type: 'application/json'});
+    const rootFolderName = 'Stories';
+    const batchName = `${safeTitle} - ${dateStr}`;
+    const fullFolderPath = `${rootFolderName}/${batchName}`;
+
+    // Create human-readable script content
+    let scriptContent = `Title: ${storyTitle}\n\n`;
+    scriptContent += '========================================\n\n';
+
+    editableScript.forEach((scene) => {
+      scriptContent += `Scene: ${scene.scene}\n`;
+      scriptContent += `Description: ${scene.description}\n`;
+      scriptContent += `Image Prompt: ${scene.imagePrompt}\n\n`;
+      scriptContent += '----------------------------------------\n\n';
+    });
+
+    // Download script.txt
+    const scriptBlob = new Blob([scriptContent], {type: 'text/plain'});
     const scriptUrl = URL.createObjectURL(scriptBlob);
     const scriptLink = document.createElement('a');
     scriptLink.href = scriptUrl;
-    scriptLink.download = `${folderName}/script.json`;
+    scriptLink.download = `${fullFolderPath}/script.txt`;
     document.body.appendChild(scriptLink);
     scriptLink.click();
     document.body.removeChild(scriptLink);
@@ -181,7 +194,7 @@ const StoryGenerator: React.FC<StoryGeneratorProps> = ({
       if (scene.imageUrl) {
         const imageLink = document.createElement('a');
         imageLink.href = scene.imageUrl;
-        imageLink.download = `${folderName}/scene_${scene.scene}.png`;
+        imageLink.download = `${fullFolderPath}/scene_${scene.scene}.png`;
         document.body.appendChild(imageLink);
         imageLink.click();
         document.body.removeChild(imageLink);
