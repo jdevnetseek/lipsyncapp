@@ -2,6 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
+import {Scene} from '../types';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1';
 
@@ -84,4 +85,55 @@ export const generateImage = async (
   const imageUrl = `data:image/png;base64,${base64Image}`;
   console.log('OpenAI image generation successful.');
   return {imageUrl};
+};
+
+export const generateStoryScript = async (
+  prompt: string,
+  apiKey: string,
+): Promise<{scenes: Scene[]}> => {
+  console.log('Starting OpenAI story script generation for prompt:', prompt);
+  const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a creative storyteller. Generate a story script based on the user's request. Also generate a simple, concise, DALL-E-style image prompt for each scene. Your output must be a JSON object with a single key, "scenes", which is an array of objects. Each object must have three keys: "scene" (number), "description" (string), and "image_prompt" (string).`,
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      response_format: {type: 'json_object'},
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(`OpenAI API Error: ${errorData.error.message}`);
+  }
+
+  const data = await response.json();
+  const content = JSON.parse(data.choices[0].message.content);
+
+  if (!content.scenes || !Array.isArray(content.scenes)) {
+    throw new Error('Invalid script format received from OpenAI API.');
+  }
+
+  const scenes: Scene[] = content.scenes.map((s: any) => ({
+    scene: s.scene,
+    description: s.description,
+    imageUrl: null,
+    isLoading: false,
+    imagePrompt: s.image_prompt,
+  }));
+
+  console.log('OpenAI story script generation successful.');
+  return {scenes};
 };

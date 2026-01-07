@@ -2,8 +2,8 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import {GoogleGenAI, Modality, Video} from '@google/genai';
-import {ImageFile} from '../types';
+import {GoogleGenAI, Modality, Type, Video} from '@google/genai';
+import {ImageFile, Scene} from '../types';
 
 export const generateSpeech = async (
   text: string,
@@ -126,4 +126,69 @@ export const generateImage = async (
   }
 
   throw new Error('No image data received from API.');
+};
+
+export const generateStoryScript = async (
+  prompt: string,
+): Promise<{scenes: Scene[]}> => {
+  console.log('Starting story script generation for prompt:', prompt);
+  const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+
+  const fullPrompt = `You are a creative storyteller. Based on the user's request, generate a story script. Also generate a simple, concise, DALL-E-style image prompt for each scene that captures the essence of the scene's description.
+
+User request: "${prompt}"
+
+Please provide the output in a valid JSON format.`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: fullPrompt,
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          scenes: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                scene: {
+                  type: Type.NUMBER,
+                  description: 'The scene number, starting from 1.',
+                },
+                description: {
+                  type: Type.STRING,
+                  description: 'A paragraph describing the events of the scene.',
+                },
+                image_prompt: {
+                  type: Type.STRING,
+                  description: 'A concise DALL-E style prompt for generating the image for this scene.',
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const jsonText = response.text.trim();
+  const data = JSON.parse(jsonText);
+
+  if (!data.scenes || !Array.isArray(data.scenes)) {
+    throw new Error('Invalid script format received from API.');
+  }
+
+  const scenes: Scene[] = data.scenes.map((s: any) => ({
+    scene: s.scene,
+    description: s.description,
+    // The image prompt from the LLM will be used as the description for the image generator
+    imageUrl: null,
+    isLoading: false,
+    imagePrompt: s.image_prompt,
+  }));
+
+  console.log('Story script generation successful.');
+  return {scenes};
 };

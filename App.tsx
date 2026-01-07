@@ -11,12 +11,14 @@ import VideoResult from './components/VideoResult';
 import ImageResult from './components/ImageResult';
 import * as geminiService from './services/geminiService';
 import * as openAiService from './services/openAiService';
-import {AppState, GenerateLipSyncParams} from './types';
-import {ImageIcon, MicIcon} from './components/icons';
+import {AppState, GenerateLipSyncParams, Scene} from './types';
+import {BookOpenIcon, ImageIcon, MicIcon} from './components/icons';
 import ApiProviderSelector from './components/ApiProviderSelector';
 import OpenAiKeyDialog from './components/OpenAiKeyDialog';
+import StoryPromptForm from './components/StoryPromptForm';
+import StoryGenerator from './components/StoryGenerator';
 
-type Mode = 'lipsync' | 'image';
+type Mode = 'lipsync' | 'image' | 'story';
 type ApiProvider = 'gemini' | 'openai';
 
 const App: React.FC = () => {
@@ -36,6 +38,9 @@ const App: React.FC = () => {
   // Image state
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imagePrompt, setImagePrompt] = useState<string | null>(null);
+
+  // Story state
+  const [storyScript, setStoryScript] = useState<Scene[] | null>(null);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -123,7 +128,6 @@ const App: React.FC = () => {
         console.error('Generation failed:', error);
         const errorMessage =
           error instanceof Error ? error.message : 'An unknown error occurred.';
-        // ... (error handling logic remains the same)
         setErrorMessage(`Generation failed: ${errorMessage}`);
         setAppState(AppState.ERROR);
       } finally {
@@ -134,11 +138,20 @@ const App: React.FC = () => {
   );
 
   const handleGenerateImage = useCallback(
-    async (prompt: string) => {
-      setAppState(AppState.LOADING);
+    async (prompt: string, isStoryImage = false, sceneIndex?: number) => {
+      if (!isStoryImage) {
+        setAppState(AppState.LOADING);
+        setImagePrompt(prompt);
+      } else if (typeof sceneIndex === 'number') {
+        setStoryScript((prev) =>
+          prev!.map((s, i) =>
+            i === sceneIndex ? {...s, isLoading: true} : s,
+          ),
+        );
+      }
+
       setErrorMessage(null);
       setImageUrl(null);
-      setImagePrompt(prompt);
       setLoadingMessage('Generating your image...');
 
       try {
@@ -146,7 +159,7 @@ const App: React.FC = () => {
         if (apiProvider === 'openai') {
           if (!openAiApiKey) {
             setShowOpenAiKeyDialog(true);
-            setAppState(AppState.IDLE); // Show form behind dialog
+            if (!isStoryImage) setAppState(AppState.IDLE);
             return;
           }
           const {imageUrl} = await openAiService.generateImage(
@@ -158,19 +171,85 @@ const App: React.FC = () => {
           // Gemini
           if (window.aistudio && !(await window.aistudio.hasSelectedApiKey())) {
             setShowApiKeyDialog(true);
-            setAppState(AppState.IDLE);
+            if (!isStoryImage) setAppState(AppState.IDLE);
             return;
           }
           const {imageUrl} = await geminiService.generateImage(prompt);
           resultUrl = imageUrl;
         }
-        setImageUrl(resultUrl);
-        setAppState(AppState.SUCCESS);
+
+        if (isStoryImage && typeof sceneIndex === 'number') {
+          setStoryScript((prev) =>
+            prev!.map((s, i) =>
+              i === sceneIndex
+                ? {...s, isLoading: false, imageUrl: resultUrl}
+                : s,
+            ),
+          );
+        } else {
+          setImageUrl(resultUrl);
+          setAppState(AppState.SUCCESS);
+        }
       } catch (error) {
         console.error('Generation failed:', error);
         const errMessage =
           error instanceof Error ? error.message : 'An unknown error occurred.';
-        setErrorMessage(`Generation failed: ${errMessage}`);
+        if (isStoryImage && typeof sceneIndex === 'number') {
+           setStoryScript((prev) =>
+            prev!.map((s, i) =>
+              i === sceneIndex ? {...s, isLoading: false} : s,
+            ),
+          );
+           // Maybe show an error on the scene item itself in the future
+           alert(`Failed to generate image for scene ${sceneIndex + 1}: ${errMessage}`);
+        } else {
+          setErrorMessage(`Generation failed: ${errMessage}`);
+          setAppState(AppState.ERROR);
+        }
+      } finally {
+        if (!isStoryImage) setLoadingMessage('');
+      }
+    },
+    [apiProvider, openAiApiKey],
+  );
+
+  const handleGenerateScript = useCallback(
+    async (prompt: string) => {
+      setAppState(AppState.LOADING);
+      setErrorMessage(null);
+      setStoryScript(null);
+      setLoadingMessage('Generating your script...');
+
+      try {
+        let script: Scene[];
+        if (apiProvider === 'openai') {
+          if (!openAiApiKey) {
+            setShowOpenAiKeyDialog(true);
+            setAppState(AppState.IDLE); // Show form behind dialog
+            return;
+          }
+          const {scenes} = await openAiService.generateStoryScript(
+            prompt,
+            openAiApiKey,
+          );
+          script = scenes;
+        } else {
+          // Gemini
+          if (window.aistudio && !(await window.aistudio.hasSelectedApiKey())) {
+            setShowApiKeyDialog(true);
+            setAppState(AppState.IDLE);
+            return;
+          }
+          const {scenes} = await geminiService.generateStoryScript(prompt);
+          script = scenes;
+        }
+        setStoryScript(script);
+        setAppState(AppState.IDLE); // Go back to idle to show the generator UI
+      } catch (error) {
+        console.error('Script generation failed:', error);
+        const errMessage =
+          error instanceof Error ? error.message : 'An unknown error occurred.';
+        setErrorMessage(`Script generation failed: ${errMessage}`);
         setAppState(AppState.ERROR);
       } finally {
         setLoadingMessage('');
@@ -197,6 +276,7 @@ const App: React.FC = () => {
     setAudioData(null);
     setImageUrl(null);
     setImagePrompt(null);
+    setStoryScript(null);
     setErrorMessage(null);
   }, []);
 
@@ -233,13 +313,80 @@ const App: React.FC = () => {
             : 'text-gray-400 hover:bg-gray-700'
         }`}>
         <ImageIcon className="w-5 h-5" />
-        Image Generation
+        Image
+      </button>
+       <button
+        onClick={() => setMode('story')}
+        className={`flex items-center gap-2 px-6 py-2 rounded-lg font-semibold transition-colors ${
+          mode === 'story'
+            ? 'bg-indigo-600 text-white'
+            : 'text-gray-400 hover:bg-gray-700'
+        }`}>
+        <BookOpenIcon className="w-5 h-5" />
+        Story
       </button>
     </div>
   );
 
+  const renderContent = () => {
+    if (appState === AppState.LOADING) {
+      return <LoadingIndicator primaryMessage={loadingMessage} />;
+    }
+
+    if (appState === AppState.ERROR && errorMessage) {
+      return renderError(errorMessage);
+    }
+
+    if (mode === 'story') {
+      if (storyScript) {
+        return (
+          <StoryGenerator
+            script={storyScript}
+            onGenerateImage={(index, prompt) =>
+              handleGenerateImage(prompt, true, index)
+            }
+            onCreateNew={handleCreateNew}
+          />
+        );
+      }
+      return <StoryPromptForm onGenerate={handleGenerateScript} />;
+    }
+
+    if (appState === AppState.SUCCESS) {
+      if (mode === 'lipsync' && videoUrl && audioData) {
+        return (
+          <VideoResult
+            videoUrl={videoUrl}
+            audioData={audioData}
+            onCreateNew={handleCreateNew}
+          />
+        );
+      }
+      if (mode === 'image' && imageUrl && imagePrompt) {
+        return (
+          <ImageResult
+            imageUrl={imageUrl}
+            prompt={imagePrompt}
+            onCreateNew={handleCreateNew}
+          />
+        );
+      }
+    }
+
+    if (appState === AppState.IDLE) {
+      switch (mode) {
+        case 'lipsync':
+          return <LipSyncPromptForm onGenerate={handleGenerateLipSync} />;
+        case 'image':
+          return <ImagePromptForm onGenerate={handleGenerateImage} />;
+        default:
+          return null;
+      }
+    }
+  };
+
   return (
-    <div className="h-screen bg-black text-gray-200 flex flex-col font-sans overflow-auto">
+    <div className="min-h-screen bg-black text-gray-200 flex flex-col font-sans overflow-auto">
       {apiProvider === 'gemini' && showApiKeyDialog && (
         <ApiKeyDialog onContinue={handleApiKeyDialogContinue} />
       )}
@@ -254,8 +401,8 @@ const App: React.FC = () => {
           LipSync Studio
         </h1>
       </header>
-      <main className="w-full max-w-4xl mx-auto flex-grow flex flex-col items-center justify-center p-4">
-        {appState === AppState.IDLE && (
+      <main className="w-full max-w-7xl mx-auto flex-grow flex flex-col items-center p-4">
+        {appState !== AppState.LOADING && (
           <>
             <ApiProviderSelector
               provider={apiProvider}
@@ -264,42 +411,7 @@ const App: React.FC = () => {
             <ModeSelector />
           </>
         )}
-
-        {appState === AppState.IDLE && mode === 'lipsync' && (
-          <LipSyncPromptForm onGenerate={handleGenerateLipSync} />
-        )}
-        {appState === AppState.IDLE && mode === 'image' && (
-          <ImagePromptForm onGenerate={handleGenerateImage} />
-        )}
-
-        {appState === AppState.LOADING && (
-          <LoadingIndicator primaryMessage={loadingMessage} />
-        )}
-
-        {appState === AppState.SUCCESS &&
-          mode === 'lipsync' &&
-          videoUrl &&
-          audioData && (
-            <VideoResult
-              videoUrl={videoUrl}
-              audioData={audioData}
-              onCreateNew={handleCreateNew}
-            />
-          )}
-        {appState === AppState.SUCCESS &&
-          mode === 'image' &&
-          imageUrl &&
-          imagePrompt && (
-            <ImageResult
-              imageUrl={imageUrl}
-              prompt={imagePrompt}
-              onCreateNew={handleCreateNew}
-            />
-          )}
-
-        {appState === AppState.ERROR &&
-          errorMessage &&
-          renderError(errorMessage)}
+        {renderContent()}
       </main>
     </div>
   );

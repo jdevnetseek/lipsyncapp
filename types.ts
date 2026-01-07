@@ -19,3 +19,12 @@ export interface GenerateLipSyncParams {
   script: string;
   image: ImageFile;
 }
+
+export interface Scene {
+  scene: number;
+  description: string;
+  // Fix: Add missing imagePrompt property.
+  imagePrompt: string;
+  imageUrl: string | null;
+  isLoading?: boolean;
+}

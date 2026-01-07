@@ -7,6 +7,7 @@ import {
   ArrowDown,
   ArrowRight,
   Baseline,
+  BookOpen,
   BrainCircuit,
   ChevronDown,
   Download,
@@ -80,3 +81,7 @@ export const DownloadIcon: React.FC<React.SVGProps<SVGSVGElement>> = (
 export const BrainCircuitIcon: React.FC<React.SVGProps<SVGSVGElement>> = (
   props,
 ) => <BrainCircuit {...defaultProps} {...props} />;
+
+export const BookOpenIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <BookOpen {...defaultProps} {...props} />
+);
