@@ -1,0 +1,6 @@
+{
+  "name": "Lipsync",
+  "description": "A creative suite to generate content using either Gemini or OpenAI. Generate images from text, or use Gemini to upload a character and generate a lip-synced video of them speaking your words.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
