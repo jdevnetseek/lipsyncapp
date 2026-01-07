@@ -154,6 +154,34 @@ const App: React.FC = () => {
       setImageUrl(null);
       setLoadingMessage('Generating your image...');
 
+      let referenceImage: {base64: string; mimeType: string} | undefined =
+        undefined;
+
+      if (
+        isStoryImage &&
+        typeof sceneIndex === 'number' &&
+        sceneIndex > 0 &&
+        storyScript
+      ) {
+        const previousImageUrl = storyScript[sceneIndex - 1]?.imageUrl;
+        if (previousImageUrl && previousImageUrl.startsWith('data:')) {
+          try {
+            const parts = previousImageUrl.split(',');
+            const header = parts[0];
+            const base64 = parts[1];
+            const mimeTypeMatch = header.match(/:(.*?);/);
+            if (base64 && mimeTypeMatch && mimeTypeMatch[1]) {
+              referenceImage = {
+                base64,
+                mimeType: mimeTypeMatch[1],
+              };
+            }
+          } catch (e) {
+            console.error('Could not parse reference image data URL', e);
+          }
+        }
+      }
+
       try {
         let resultUrl: string;
         if (apiProvider === 'openai') {
@@ -165,16 +193,23 @@ const App: React.FC = () => {
           const {imageUrl} = await openAiService.generateImage(
             prompt,
             openAiApiKey,
+            referenceImage,
           );
           resultUrl = imageUrl;
         } else {
           // Gemini
-          if (window.aistudio && !(await window.aistudio.hasSelectedApiKey())) {
+          if (
+            window.aistudio &&
+            !(await window.aistudio.hasSelectedApiKey())
+          ) {
             setShowApiKeyDialog(true);
             if (!isStoryImage) setAppState(AppState.IDLE);
             return;
           }
-          const {imageUrl} = await geminiService.generateImage(prompt);
+          const {imageUrl} = await geminiService.generateImage(
+            prompt,
+            referenceImage,
+          );
           resultUrl = imageUrl;
         }
 
@@ -195,13 +230,15 @@ const App: React.FC = () => {
         const errMessage =
           error instanceof Error ? error.message : 'An unknown error occurred.';
         if (isStoryImage && typeof sceneIndex === 'number') {
-           setStoryScript((prev) =>
+          setStoryScript((prev) =>
             prev!.map((s, i) =>
               i === sceneIndex ? {...s, isLoading: false} : s,
             ),
           );
-           // Maybe show an error on the scene item itself in the future
-           alert(`Failed to generate image for scene ${sceneIndex + 1}: ${errMessage}`);
+          // Maybe show an error on the scene item itself in the future
+          alert(
+            `Failed to generate image for scene ${sceneIndex + 1}: ${errMessage}`,
+          );
         } else {
           setErrorMessage(`Generation failed: ${errMessage}`);
           setAppState(AppState.ERROR);
@@ -210,7 +247,7 @@ const App: React.FC = () => {
         if (!isStoryImage) setLoadingMessage('');
       }
     },
-    [apiProvider, openAiApiKey],
+    [apiProvider, openAiApiKey, storyScript],
   );
 
   const handleGenerateScript = useCallback(
@@ -235,7 +272,10 @@ const App: React.FC = () => {
           script = scenes;
         } else {
           // Gemini
-          if (window.aistudio && !(await window.aistudio.hasSelectedApiKey())) {
+          if (
+            window.aistudio &&
+            !(await window.aistudio.hasSelectedApiKey())
+          ) {
             setShowApiKeyDialog(true);
             setAppState(AppState.IDLE);
             return;
@@ -315,7 +355,7 @@ const App: React.FC = () => {
         <ImageIcon className="w-5 h-5" />
         Image
       </button>
-       <button
+      <button
         onClick={() => setMode('story')}
         className={`flex items-center gap-2 px-6 py-2 rounded-lg font-semibold transition-colors ${
           mode === 'story'
@@ -346,6 +386,7 @@ const App: React.FC = () => {
               handleGenerateImage(prompt, true, index)
             }
             onCreateNew={handleCreateNew}
+            apiProvider={apiProvider}
           />
         );
       }

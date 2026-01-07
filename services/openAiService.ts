@@ -52,8 +52,14 @@ export const generateSpeech = async (
 export const generateImage = async (
   prompt: string,
   apiKey: string,
+  referenceImage?: {base64: string; mimeType: string},
 ): Promise<{imageUrl: string}> => {
   console.log('Starting OpenAI image generation for prompt:', prompt);
+  if (referenceImage) {
+    console.warn(
+      'OpenAI DALL-E 3 API does not support reference images for consistency. This parameter will be ignored.',
+    );
+  }
 
   const response = await fetch(`${OPENAI_API_URL}/images/generations`, {
     method: 'POST',

@@ -17,6 +17,7 @@ interface StoryGeneratorProps {
   script: Scene[];
   onGenerateImage: (sceneIndex: number, prompt: string) => void;
   onCreateNew: () => void;
+  apiProvider: 'gemini' | 'openai';
 }
 
 const SceneItem: React.FC<{
@@ -106,6 +107,7 @@ const StoryGenerator: React.FC<StoryGeneratorProps> = ({
   script,
   onGenerateImage,
   onCreateNew,
+  apiProvider,
 }) => {
   const [editableScript, setEditableScript] = useState<Scene[]>(script);
   const [storyTitle, setStoryTitle] = useState('');
@@ -202,6 +204,13 @@ const StoryGenerator: React.FC<StoryGeneratorProps> = ({
             ? 'Scroll through the film strip to see your visual narrative.'
             : 'Add, remove, or edit scenes, then generate images to bring your script to life.'}
         </p>
+        {apiProvider === 'openai' && (
+          <p className="mt-4 text-xs text-yellow-400 bg-yellow-900/30 border border-yellow-800/50 rounded-md px-3 py-2 max-w-md mx-auto">
+            <strong>Note:</strong> Character consistency across scenes is a
+            feature best supported by Gemini and may not work as expected with
+            OpenAI.
+          </p>
+        )}
         <input
           type="text"
           value={storyTitle}
@@ -214,7 +223,7 @@ const StoryGenerator: React.FC<StoryGeneratorProps> = ({
       <div className="w-full flex overflow-x-auto items-stretch space-x-6 pb-4">
         {editableScript.map((scene, index) => (
           <SceneItem
-            key={scene.scene}
+            key={index} // Use index for key to handle additions/removals
             scene={scene}
             sceneIndex={index}
             onGenerate={onGenerateImage}

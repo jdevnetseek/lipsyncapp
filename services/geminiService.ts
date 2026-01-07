@@ -100,14 +100,27 @@ export const generateLipSyncVideo = async (
 
 export const generateImage = async (
   prompt: string,
+  referenceImage?: {base64: string; mimeType: string},
 ): Promise<{imageUrl: string}> => {
   console.log('Starting image generation for prompt:', prompt);
   const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
 
+  const parts: any[] = [];
+  if (referenceImage) {
+    console.log('Using reference image for consistency.');
+    parts.push({
+      inlineData: {
+        data: referenceImage.base64,
+        mimeType: referenceImage.mimeType,
+      },
+    });
+  }
+  parts.push({text: prompt});
+
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
     contents: {
-      parts: [{text: prompt}],
+      parts: parts,
     },
     config: {
       imageConfig: {
